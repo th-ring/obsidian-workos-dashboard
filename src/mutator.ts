@@ -1,4 +1,4 @@
-import { App, TFile, normalizePath } from 'obsidian';
+﻿import { App, TFile, normalizePath } from 'obsidian';
 import { ItemType, Priority, TaskStatus, Assignee, ReviewStatus, WorkstreamStatus } from './types';
 
 function sanitizeFileName(title: string): string {
@@ -12,6 +12,18 @@ function sanitizeFileName(title: string): string {
 export async function openFileInObsidian(app: App, file: TFile, newLeaf = false) {
   const leaf = app.workspace.getLeaf(newLeaf);
   await leaf.openFile(file);
+}
+
+async function ensureDirectoryExists(app: App, dirPath: string): Promise<void> {
+  const parts = normalizePath(dirPath).split('/');
+  let current = '';
+  for (const part of parts) {
+    if (!part) continue;
+    current = current ? `${current}/${part}` : part;
+    if (!(await app.vault.adapter.exists(current))) {
+      await app.vault.createFolder(current);
+    }
+  }
 }
 
 export async function updateTaskStatus(app: App, file: TFile, newStatus: TaskStatus): Promise<void> {
@@ -44,6 +56,27 @@ export async function updateReviewStatus(app: App, file: TFile, reviewStatus: Re
   });
 }
 
+export async function updateTaskWorkstream(app: App, file: TFile, newWorkstream: string | null): Promise<void> {
+  const cleanWs = newWorkstream ? newWorkstream.replace(/[\[\]]/g, '').trim() : null;
+  const formattedWs = cleanWs ? `[[${cleanWs}]]` : null;
+
+  await app.fileManager.processFrontMatter(file, (fm) => {
+    fm.workstream = formattedWs;
+    delete fm.project;
+  });
+
+  let targetFolder = '10_Tasks';
+  if (cleanWs) {
+    targetFolder = `20_Workstreams/${cleanWs}/Tasks`;
+  }
+
+  await ensureDirectoryExists(app, targetFolder);
+  const targetPath = normalizePath(`${targetFolder}/${file.name}`);
+  if (file.path !== targetPath && !(await app.vault.adapter.exists(targetPath))) {
+    await app.fileManager.renameFile(file, targetPath);
+  }
+}
+
 export async function createWorkstreamScaffold(
   app: App,
   title: string,
@@ -57,28 +90,10 @@ export async function createWorkstreamScaffold(
   const cleanTitle = title.trim();
   const safeName = sanitizeFileName(cleanTitle) || 'Untitled-Workstream';
   const today = new Date().toISOString().split('T')[0];
-  const workstreamDir = normalizePath(`20_Workstreams/${safeName}`);
+  const workstreamDir = `20_Workstreams/${safeName}`;
 
-  // Ensure root directory exists
-  if (!(await app.vault.adapter.exists('20_Workstreams'))) {
-    await app.vault.createFolder('20_Workstreams');
-  }
-
-  // Create workstream folder
-  if (!(await app.vault.adapter.exists(workstreamDir))) {
-    await app.vault.createFolder(workstreamDir);
-  }
-
-  // Create subfolders Tasks/ and Notes/
-  const tasksDir = normalizePath(`${workstreamDir}/Tasks`);
-  if (!(await app.vault.adapter.exists(tasksDir))) {
-    await app.vault.createFolder(tasksDir);
-  }
-
-  const notesDir = normalizePath(`${workstreamDir}/Notes`);
-  if (!(await app.vault.adapter.exists(notesDir))) {
-    await app.vault.createFolder(notesDir);
-  }
+  await ensureDirectoryExists(app, `${workstreamDir}/Tasks`);
+  await ensureDirectoryExists(app, `${workstreamDir}/Notes`);
 
   // Create AGENTS.md
   const agentsPath = normalizePath(`${workstreamDir}/AGENTS.md`);
@@ -182,19 +197,23 @@ export async function createItem(
   let frontmatterObj: Record<string, any> = {};
   let body = data.content || '';
 
+  const cleanWs = data.workstream ? data.workstream.replace(/[\[\]]/g, '').trim() : null;
+  const formattedWs = cleanWs ? `[[${cleanWs}]]` : null;
+
   if (type === 'task') {
-    folder = '10_Tasks';
+    folder = cleanWs ? `20_Workstreams/${cleanWs}/Tasks` : '10_Tasks';
     frontmatterObj = {
       type: 'task',
       title: cleanTitle,
       status: 'todo',
       priority: data.priority || 'medium',
-      workstream: data.workstream || null,
+      workstream: formattedWs,
       due: data.due || null,
       created: today,
       tags: data.tags || [],
       assigned_to: data.assigned_to || 'user',
       review_status: null,
+      agent_state: 'idle',
     };
     if (!body) {
       body = `\n## Subtasks\n- [ ] Erste Teilaufgabe\n`;
@@ -208,22 +227,26 @@ export async function createItem(
       source: 'quick-capture',
       created: today,
       tags: data.tags || [],
+      agent_state: 'idle',
     };
     if (!body) {
       body = `\n## Gedanken\n`;
     }
   } else if (type === 'note') {
-    folder = '30_Notes';
+    folder = cleanWs ? `20_Workstreams/${cleanWs}/Notes` : '30_Notes';
     frontmatterObj = {
       type: 'note',
       title: cleanTitle,
       category: data.category || 'general',
-      workstream: data.workstream || null,
+      workstream: formattedWs,
       created: today,
       updated: today,
       tags: data.tags || [],
+      agent_state: 'idle',
     };
   }
+
+  await ensureDirectoryExists(app, folder);
 
   // Check unique path
   let targetPath = normalizePath(`${folder}/${safeName}.md`);
@@ -250,11 +273,6 @@ export async function createItem(
   }
   yamlStr += '---\n\n' + body.trim() + '\n';
 
-  // Ensure folder exists
-  if (!(await app.vault.adapter.exists(folder))) {
-    await app.vault.createFolder(folder);
-  }
-
   return await app.vault.create(targetPath, yamlStr);
 }
 
@@ -269,25 +287,27 @@ export async function convertBraindumpToTask(
   } = {}
 ): Promise<TFile> {
   const today = new Date().toISOString().split('T')[0];
+  const cleanWs = options.workstream ? options.workstream.replace(/[\[\]]/g, '').trim() : null;
+  const formattedWs = cleanWs ? `[[${cleanWs}]]` : null;
+
   await app.fileManager.processFrontMatter(file, (fm) => {
     fm.type = 'task';
     fm.status = 'todo';
     fm.priority = options.priority || 'medium';
-    fm.workstream = options.workstream || null;
+    fm.workstream = formattedWs;
     delete fm.project;
     fm.due = options.due || null;
     fm.assigned_to = 'user';
     fm.review_status = null;
+    fm.agent_state = 'idle';
     if (options.title) fm.title = options.title;
     if (!fm.created) fm.created = today;
   });
 
-  // Ensure 10_Tasks folder exists
-  if (!(await app.vault.adapter.exists('10_Tasks'))) {
-    await app.vault.createFolder('10_Tasks');
-  }
+  let targetFolder = cleanWs ? `20_Workstreams/${cleanWs}/Tasks` : '10_Tasks';
+  await ensureDirectoryExists(app, targetFolder);
 
-  const targetPath = normalizePath(`10_Tasks/${file.name}`);
+  const targetPath = normalizePath(`${targetFolder}/${file.name}`);
   if (file.path !== targetPath && !(await app.vault.adapter.exists(targetPath))) {
     await app.fileManager.renameFile(file, targetPath);
   }
@@ -304,22 +324,24 @@ export async function convertBraindumpToNote(
   } = {}
 ): Promise<TFile> {
   const today = new Date().toISOString().split('T')[0];
+  const cleanWs = options.workstream ? options.workstream.replace(/[\[\]]/g, '').trim() : null;
+  const formattedWs = cleanWs ? `[[${cleanWs}]]` : null;
+
   await app.fileManager.processFrontMatter(file, (fm) => {
     fm.type = 'note';
     fm.category = options.category || 'general';
-    fm.workstream = options.workstream || null;
+    fm.workstream = formattedWs;
     delete fm.project;
     fm.updated = today;
+    fm.agent_state = 'idle';
     if (options.title) fm.title = options.title;
     if (!fm.created) fm.created = today;
   });
 
-  // Ensure 30_Notes folder exists
-  if (!(await app.vault.adapter.exists('30_Notes'))) {
-    await app.vault.createFolder('30_Notes');
-  }
+  let targetFolder = cleanWs ? `20_Workstreams/${cleanWs}/Notes` : '30_Notes';
+  await ensureDirectoryExists(app, targetFolder);
 
-  const targetPath = normalizePath(`30_Notes/${file.name}`);
+  const targetPath = normalizePath(`${targetFolder}/${file.name}`);
   if (file.path !== targetPath && !(await app.vault.adapter.exists(targetPath))) {
     await app.fileManager.renameFile(file, targetPath);
   }
@@ -331,10 +353,7 @@ export async function archiveItem(app: App, file: TFile): Promise<void> {
     fm.status = 'archived';
   });
 
-  if (!(await app.vault.adapter.exists('40_Archive'))) {
-    await app.vault.createFolder('40_Archive');
-  }
-
+  await ensureDirectoryExists(app, '40_Archive');
   const targetPath = normalizePath(`40_Archive/${file.name}`);
   if (file.path !== targetPath && !(await app.vault.adapter.exists(targetPath))) {
     await app.fileManager.renameFile(file, targetPath);
