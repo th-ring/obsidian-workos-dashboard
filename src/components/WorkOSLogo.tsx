@@ -75,10 +75,9 @@ export const WorkOSLogo: React.FC<WorkOSLogoProps> = ({
   );
 };
 
+// SVG Inner Content for Obsidian's addIcon (Obsidian natively wraps in <svg viewBox="0 0 100 100">)
 export const WORKOS_LOGO_SVG_STRING = `
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M3.5 6L8.5 19L12 11.5L15.5 19L20.5 6"/>
-  <path d="M12 11.5V4"/>
-</svg>
+<path d="M15 25 L35 79 L50 48 L65 79 L85 25" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M50 48 V17" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
 `.trim();
 
