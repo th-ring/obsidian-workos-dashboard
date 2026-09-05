@@ -1,4 +1,4 @@
-﻿import esbuild from "esbuild";
+import esbuild from "esbuild";
 import process from "process";
 import fs from "fs";
 import path from "path";
@@ -36,7 +36,9 @@ async function buildCss() {
 
 // Copy manifest.json
 function copyManifest() {
-  const manifestSrc = path.resolve("./src/manifest.json");
+  const manifestSrc = fs.existsSync(path.resolve("./manifest.json"))
+    ? path.resolve("./manifest.json")
+    : path.resolve("./src/manifest.json");
   if (fs.existsSync(manifestSrc)) {
     let content = fs.readFileSync(manifestSrc, "utf8");
     if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);

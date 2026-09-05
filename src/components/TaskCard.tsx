@@ -71,7 +71,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, app, onRefresh }) => {
     onRefresh();
   };
 
-  const cleanProject = task.project ? task.project.replace(/\[\[|\]\]/g, '').trim() : null;
+  const cleanWorkstream = task.workstream ? task.workstream.replace(/\[\[|\]\]/g, '').trim() : null;
   const priorityInfo = PRIORITY_DOTS[task.priority] || PRIORITY_DOTS.medium;
   const formattedDate = formatCompactDate(task.due);
 
@@ -131,15 +131,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, app, onRefresh }) => {
         </div>
       </div>
 
-      {/* Meta Row: Project, Tags, People, Date, Subtasks */}
+      {/* Meta Row: Workstream, Tags, People, Date, Subtasks */}
       <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--workos-text-muted)] mt-2.5 pt-2 border-t border-[var(--workos-border)]">
-        {cleanProject && (
+        {cleanWorkstream && (
           <span
             className="inline-flex items-center gap-1 text-[10.5px] font-medium text-[var(--workos-text-muted)] hover:text-[var(--workos-text-primary)] transition-colors truncate max-w-[130px]"
-            title={`Projekt: ${cleanProject}`}
+            title={`Workstream: ${cleanWorkstream}`}
           >
             <FolderGit2 className="w-3 h-3 opacity-60 shrink-0" />
-            <span className="truncate">{cleanProject}</span>
+            <span className="truncate">{cleanWorkstream}</span>
           </span>
         )}
 
@@ -182,18 +182,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, app, onRefresh }) => {
           </span>
         )}
 
-        {task.subtasks && task.subtasks.total > 0 && (
+        {task.subtaskTotal > 0 && (
           <div className="w-full mt-2 pt-1 flex items-center justify-between text-[10px] text-[var(--workos-text-muted)]">
             <div className="w-28 bg-[var(--workos-input-bg)] h-1 rounded-full overflow-hidden border border-[var(--workos-border)]">
               <div
                 className="bg-[var(--workos-text-muted)] h-full rounded-full transition-all"
                 style={{
-                  width: `${(task.subtasks.completed / task.subtasks.total) * 100}%`,
+                  width: `${(task.subtaskCompleted / task.subtaskTotal) * 100}%`,
                 }}
               />
             </div>
             <span className="font-mono">
-              {task.subtasks.completed}/{task.subtasks.total}
+              {task.subtaskCompleted}/{task.subtaskTotal}
             </span>
           </div>
         )}

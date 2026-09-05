@@ -1,0 +1,9 @@
+{
+  "id": "workos-dashboard",
+  "name": "WorkOS Dashboard",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Agentic-first Dashboard & Kanban Board for Obsidian WorkOS with live YAML frontmatter synchronization.",
+  "author": "Obsidian WorkOS Team",
+  "isDesktopOnly": false
+}

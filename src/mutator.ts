@@ -1,4 +1,5 @@
-﻿import { App, TFile, normalizePath } from 'obsidian';
+import { App, TFile, normalizePath } from 'obsidian';
+import matter from 'gray-matter';
 import { ItemType, Priority, TaskStatus, Assignee, ReviewStatus, WorkstreamStatus } from './types';
 
 function sanitizeFileName(title: string): string {
@@ -129,18 +130,6 @@ Du agierst in diesem Workstream als **Fachexperte & leitender Assistent** für: 
     tags: options.tags || [],
   };
 
-  let yamlStr = '---\n';
-  for (const [k, v] of Object.entries(frontmatter)) {
-    if (Array.isArray(v)) {
-      yamlStr += v.length === 0 ? `${k}: []\n` : `${k}:\n${v.map((item) => `  - ${item}`).join('\n')}\n`;
-    } else if (v === null) {
-      yamlStr += `${k}: null\n`;
-    } else {
-      yamlStr += `${k}: ${typeof v === 'string' && v.includes(':') ? `"${v}"` : v}\n`;
-    }
-  }
-  yamlStr += '---\n\n';
-
   const bodyContent = `# 🏛️ ${cleanTitle}
 
 ## 🎯 Strategischer Kontext & Vision
@@ -164,7 +153,8 @@ Was soll mit diesem Workstream erreicht werden?
   if (await app.vault.adapter.exists(readmePath)) {
     return app.vault.getAbstractFileByPath(readmePath) as TFile;
   }
-  return await app.vault.create(readmePath, yamlStr + bodyContent);
+  const fileContent = matter.stringify(bodyContent.trim(), frontmatter);
+  return await app.vault.create(readmePath, fileContent);
 }
 
 export async function createItem(
@@ -256,24 +246,8 @@ export async function createItem(
     counter++;
   }
 
-  // Build markdown string
-  let yamlStr = '---\n';
-  for (const [key, value] of Object.entries(frontmatterObj)) {
-    if (Array.isArray(value)) {
-      if (value.length === 0) {
-        yamlStr += `${key}: []\n`;
-      } else {
-        yamlStr += `${key}:\n${value.map(v => `  - ${v}`).join('\n')}\n`;
-      }
-    } else if (value === null) {
-      yamlStr += `${key}: null\n`;
-    } else {
-      yamlStr += `${key}: ${typeof value === 'string' && value.includes(':') ? `"${value}"` : value}\n`;
-    }
-  }
-  yamlStr += '---\n\n' + body.trim() + '\n';
-
-  return await app.vault.create(targetPath, yamlStr);
+  const fullContent = matter.stringify(body.trim(), frontmatterObj);
+  return await app.vault.create(targetPath, fullContent);
 }
 
 export async function convertBraindumpToTask(
@@ -296,6 +270,7 @@ export async function convertBraindumpToTask(
     fm.priority = options.priority || 'medium';
     fm.workstream = formattedWs;
     delete fm.project;
+    delete fm.source;
     fm.due = options.due || null;
     fm.assigned_to = 'user';
     fm.review_status = null;
@@ -332,6 +307,7 @@ export async function convertBraindumpToNote(
     fm.category = options.category || 'general';
     fm.workstream = formattedWs;
     delete fm.project;
+    delete fm.source;
     fm.updated = today;
     fm.agent_state = 'idle';
     if (options.title) fm.title = options.title;

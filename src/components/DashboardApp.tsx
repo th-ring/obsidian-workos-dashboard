@@ -52,13 +52,22 @@ export const DashboardApp: React.FC<DashboardAppProps> = ({ app }) => {
   useEffect(() => {
     loadData();
 
-    // Live sync on any file change
-    const modifyRef = app.vault.on('modify', () => loadData());
-    const deleteRef = app.vault.on('delete', () => loadData());
-    const createRef = app.vault.on('create', () => loadData());
-    const renameRef = app.vault.on('rename', () => loadData());
+    let timer: number | null = null;
+    const debouncedReload = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        loadData();
+      }, 200);
+    };
+
+    // Live sync on any file change with debounce
+    const modifyRef = app.vault.on('modify', debouncedReload);
+    const deleteRef = app.vault.on('delete', debouncedReload);
+    const createRef = app.vault.on('create', debouncedReload);
+    const renameRef = app.vault.on('rename', debouncedReload);
 
     return () => {
+      if (timer !== null) window.clearTimeout(timer);
       app.vault.offref(modifyRef);
       app.vault.offref(deleteRef);
       app.vault.offref(createRef);
